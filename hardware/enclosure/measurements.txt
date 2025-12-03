@@ -1,0 +1,82 @@
+PCB
+	Width	30 mm
+	Height	70 mm
+	Depth	1.6mm
+
+	Mounting holes
+		Diameter 2.7mm
+		Top hole center: 5mm in, 5mm down
+		Base hole center: 3mm in, 25mm up
+		Center hole center: 30 mm from top
+
+
+
+
+For button Presser
+	<center>
+	8mm top of BTN
+	21mm PCB edge
+	5mm padding
+	5mm press housing wall
+	1mm padding
+	<bottom inner edge of outer housing>
+
+	total size = 32mm from bottom to start button press block
+
+
+Depth merge - front face to back wall
+	5mm wall
+	4mm center standoff
+	1.6mm PCB
+	15mm RJ45 port (rounded up for tolerance)
+
+	Total = 20.6mm
+
+	Front housing is 19mm depth
+
+	It seems suitable there should be a 3mm gap between
+		Back housing inner face
+		front housing face+studs
+
+	Button if 5mm tall from PCB surface
+		3.4mm within front housing
+		6.4mm within outer housing
+
+
+
+	Top mounting screws
+		7.4mm from back of front housing to screw hole centre
+		10.4mm from back plate to screw hole centre
+
+		11.6mm from front housing face to screw hole centre
+		6.6mm from free space to screw hole centre
+		5.0mm free space for far end of screw block
+
+		17mm total height
+		
+
+
+
+Top to bottom layout
+
+	 1.5mm	Outer housing wall
+	 1.0mm	Front housing wall padding
+ 	 5.0mm	Front housing wall
+ 	 1.0mm	Front housing wall padding
+	12.0mm	Mounting block
+	 2.0mm	PCB padding
+	55.0mm	PCB
+		5.0mm PCB top and LED1 center
+		7.0mm LED1 center to LED2 center
+		7.0mm LED2 center to LED3 center
+
+		15.0mm PCB top to Hole1 center
+		7.0mm  hole1 to hole2 center
+
+		29.75mm PCB top to button center (5mm diameter
+	
+
+
+	
+
+	1.5mm	Outer housing wall

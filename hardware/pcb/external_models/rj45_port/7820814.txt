@@ -1,0 +1,13 @@
+﻿"Symbol";"Value";"Unit";
+"TraceParts.PartNumber";"90-25022025-060547";"";
+"REFERENCE";"5555153-1";"";
+"rs_stock_number";"7820814";"";
+"TraceParts.PartTitle";"ModJack,RightAngle,8Position,Cat3";"";
+"url";"https://uk.rs-online.com/web/p/ethernet-connectors/7820814//?cm_mmc=aff-_-uk-_-traceparts-_-7820814";"";
+"SUPPLIER_NAME";"RS Components";"";
+"SUPPLIER";"TE Connectivity";"";
+"DESIGN";"ModJack,RightAngle,8Position,Cat3";"";
+"TraceParts.InstanceId";"90-25022025-0605472N3XX9WWY2MK673V115V3T3RA";"";
+"TRACEPARTS";"TRACEPARTS";"";
+"TraceParts.PartLanguage";"en";"";
+"TraceParts.PartVersion";"1.0.0";"";

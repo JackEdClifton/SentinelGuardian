@@ -1,0 +1,22 @@
+
+Housing & Assembly
+  1x  3d printed back plate
+  1x  3d printed front plate
+  4x  M3 inserts
+  3x  M3 bolt 20mm
+  1x  M3 bolt 6mm (±1mm)
+  1x  compression spring 0.3x4x20mm (optional)
+  2x  screw 4x25mm
+  2x  wall plugs
+
+PCB (a)
+  1x  button 6x6x8H
+  1x  RJ45 port
+  1x  buzzer
+  1x  200Ω resistor
+  1x  1kΩ resistor
+  3x  LEDs
+
+PCB (b)
+  1x  RJ45 port
+  1x  2x3 2.54mm header
