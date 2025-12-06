@@ -1,3 +1,5 @@
-DoorBellPCB-backups/
 exports/
 fp-info-cache
+*.FCBak
+
+*-backups/
