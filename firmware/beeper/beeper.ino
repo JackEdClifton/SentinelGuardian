@@ -9,14 +9,14 @@ const int UDP_PORT = 5005;
 WiFiUDP udp;
 
 namespace DoorCodes {
-const char* NOTHING = "nodata";
-const char* ALARM = "getfuckingdoorucunts";
+	const char* NOTHING = "nodata";
+	const char* ALARM = "getfuckingdoorucunts";
 
-enum Codes {
-	NO_DATA = 0,
-	START_ALARM,
-	STOP_ALARM
-};
+	enum Codes {
+		NO_DATA = 0,
+		START_ALARM,
+		STOP_ALARM
+	};
 };
 
 
@@ -54,14 +54,22 @@ void alarm() {
 
 void setup_wifi() {
 
+	const int WIFI_TIMEOUT_ms = 10000;
+
 	WiFi.disconnect();
 
 	WiFi.mode(WIFI_STA);
 	WiFi.begin(WIFI_SSID, WIFI_PASS);
 	Serial.print("Connecting to wifi\n");
 
+
+	int ts_start = millis();
 	while (WiFi.status() != WL_CONNECTED) {
 		Serial.print("Not connected to wifi\n");
+		
+		if (millis() - ts_start > WIFI_TIMEOUT_ms) {
+			break;
+		}
 
 		switch (WiFi.status()) {
 			case WL_IDLE_STATUS: Serial.println("WL_IDLE_STATUS"); break;
