@@ -21,11 +21,11 @@ class Networking:
         NOTHING = b"nodata"
         ALARM = b"getfuckingdoorucunts"
 
-    
+
     def init():
         Networking._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
-    
+
     def send_broadcast_packet(timestamp):
         packet = struct.pack("!I", int(timestamp)) + Networking.Codes.ALARM
         Networking._sock.sendto(packet, (Networking.Config.UDP_IP, Networking.Config.UDP_PORT))
@@ -70,24 +70,24 @@ class GPIOSignal:
         GPIO.setup(GPIOSignal.LED.GREEN, GPIO.OUT)
 
         GPIO.output(GPIOSignal.BEEPER, GPIO.LOW)
-        GPIO.output(GPIOSignal.LED.RED, GPIO.HIGH)
+        GPIO.output(GPIOSignal.LED.RED, GPIO.LOW)
         GPIO.output(GPIOSignal.LED.BLUE, GPIO.LOW)
         GPIO.output(GPIOSignal.LED.GREEN, GPIO.LOW)
-        
+
 
     def _alarm_beeper_thread():
-        
+
         for i in range(5):
             GPIO.output(GPIOSignal.BEEPER, GPIO.HIGH)
             time.sleep(0.1)
             GPIO.output(GPIOSignal.BEEPER, GPIO.LOW)
             time.sleep(0.1)
-        
+
         GPIOSignal._alarm_stop_event.set()
 
-    
+
     def _alarm_LED_thread():
-        
+
         GPIO.output(GPIOSignal.LED.RED, GPIO.LOW)
 
         while not GPIOSignal._alarm_stop_event.is_set():
@@ -95,9 +95,7 @@ class GPIOSignal:
             time.sleep(0.05)
             GPIO.output(GPIOSignal.LED.BLUE, GPIO.LOW)
             time.sleep(0.05)
-        
-        GPIO.output(GPIOSignal.LED.RED, GPIO.HIGH)
-    
+
 
     def _alarm():
         if not GPIOSignal._alarm_mutex.acquire(blocking=False):
@@ -133,14 +131,14 @@ def init():
 
 def loop():
     time.sleep(0.1)
-    
+
     if GPIO.input(GPIOSignal.BUTTON) == GPIO.LOW:
         alarm()
 
         # wait for button to be released
         while GPIO.input(GPIOSignal.BUTTON) != GPIO.LOW:
             time.sleep(0.1)
-        
+
 
 
 
