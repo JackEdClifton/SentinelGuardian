@@ -18,10 +18,10 @@ const int UDP_PORT = 5005;
 const int UDP_RESPONSE_PORT = 5006;
 
 
-namespace DoorCodes {
-	const char* NO_DATA = "nodata";
-	const char* START_ALARM = "A";
-	const char* STOP_ALARM = "C";
+namespace AlarmStatusCodes {
+	const uint8_t NO_DATA = 10;
+	const uint8_t START_ALARM = 20;
+	const uint8_t STOP_ALARM = 30;
 };
 
 
@@ -57,7 +57,7 @@ void setup_wifi() {
 
 
 
-UDPPacket::UDPPacket(uint32_t ts, const char* msg) {
+UDPPacket::UDPPacket(const uint32_t ts, const uint8_t msg) {
   this->timestamp = ts;
   this->message = msg;
 }
@@ -69,7 +69,7 @@ UDPPacket read_udp_packet() {
 	// verify data is available
 	int packet_size = udp.parsePacket();
 	if (!packet_size) {
-		return UDPPacket(0, DoorCodes::NO_DATA);
+		return UDPPacket(0, AlarmStatusCodes::NO_DATA);
 	}
 
 	// read data packet
@@ -79,14 +79,14 @@ UDPPacket read_udp_packet() {
 	// verify at least the timestamp is present
 	if (len <= 4) {
 		Serial.print("[DEBUG] read_udp_packet() - insufficient data\n");
-		return UDPPacket(0, DoorCodes::NO_DATA);
+		return UDPPacket(0, AlarmStatusCodes::NO_DATA);
 	}
 
 	// need to convert because of endianness
 	uint32_t timestamp = (buffer[0] << 24) | (buffer[1] << 16) | (buffer[2] << 8) | (buffer[3]);
 
 	// message is directly after the timestamp
-	const char* message = buffer + 4;
+	uint8_t message = *(buffer + 4);
 
 	return UDPPacket(timestamp, message);
 }
@@ -95,7 +95,7 @@ UDPPacket read_udp_packet() {
 
 void send_stop_packet() {
 	udp_response.beginPacket(SERVER_IP, UDP_RESPONSE_PORT);
-	udp_response.print(DoorCodes::STOP_ALARM);
+	udp_response.print(AlarmStatusCodes::STOP_ALARM);
 	udp_response.endPacket();
 }
 

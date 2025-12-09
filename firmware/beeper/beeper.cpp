@@ -141,7 +141,7 @@ void loop() {
 
 	Serial.print("[DEBUG] loop() - parsing message\n");
 
-	if (!strcmp(packet.message, DoorCodes::START_ALARM)) {
+	if (packet.message == AlarmStatusCodes::START_ALARM) {
 		if (packet.timestamp > g_ts_LAST_ALARM) {
 			Serial.print("[DEBUG] loop() - new alarm packet recieved\n");
 			g_ts_LAST_ALARM = packet.timestamp;
@@ -153,7 +153,7 @@ void loop() {
 		}
 	}
 
-	if (!strcmp(packet.message, DoorCodes::STOP_ALARM)) {
+	if (packet.message == AlarmStatusCodes::STOP_ALARM) {
 		Serial.print("[DEBUG] loop() - recieved packet STOP_ALARM\n");
 		g_EVENT_CANCEL_ALARM = true;
 	}

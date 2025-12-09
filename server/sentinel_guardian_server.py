@@ -135,8 +135,8 @@ class Networking:
 	BROADCAST_PORT = 5005
 	LISTEN_PORT = 5006
 
-	CODE_ALARM = b"A"
-	CODE_CANCEL = b"C"
+	START_ALARM = bytes([20])
+	STOP_ALARM = bytes([30])
 
 
 	@staticmethod
@@ -144,7 +144,7 @@ class Networking:
 		print("[DEBUG] Networking.send_alarm() - sending alarm")
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-		packet = struct.pack("!I", int(timestamp)) + Networking.CODE_ALARM
+		packet = struct.pack("!I", int(timestamp)) + Networking.START_ALARM
 		sock.sendto(packet, (Networking.BROADCAST_IP, Networking.BROADCAST_PORT))
 		sock.close()
 		print("[DEBUG] Networking.send_alarm() - socket closed")
@@ -155,7 +155,7 @@ class Networking:
 		print("[DEBUG] Networking.send_cancel() - sending cancel")
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-		packet = struct.pack("!I", int(0)) + Networking.CODE_CANCEL
+		packet = struct.pack("!I", int(0)) + Networking.STOP_ALARM
 		sock.sendto(packet, (Networking.BROADCAST_IP, Networking.BROADCAST_PORT))
 		sock.close()
 		print("[DEBUG] Networking.send_cancel() - socket closed")
@@ -172,7 +172,7 @@ class Networking:
 				data, addr = sock.recvfrom(128)
 				print("[DEBUG] Networking._listen_for_cancel() - recieved data")
 
-				if data == Networking.CODE_CANCEL:
+				if data == Networking.STOP_ALARM:
 					print("[DEBUG] Networking._listen_for_cancel() - CANCEL recieved")
 					print("[DEBUG] Networking._listen_for_cancel() - setting g_EVENT_USER_CANCELLED")
 					g_EVENT_USER_CANCELLED.set()

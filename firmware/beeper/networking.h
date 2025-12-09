@@ -2,16 +2,16 @@
 
 struct UDPPacket {
 	uint32_t timestamp;
-	const char* message;
+	uint8_t message;
 
-	UDPPacket(uint32_t ts, const char* msg);
+	UDPPacket(const uint32_t ts, const uint8_t msg);
 };
 
 
-namespace DoorCodes {
-	extern const char* NO_DATA;
-	extern const char* START_ALARM;
-	extern const char* STOP_ALARM;
+namespace AlarmStatusCodes {
+	extern const uint8_t NO_DATA;
+	extern const uint8_t START_ALARM;
+	extern const uint8_t STOP_ALARM;
 };
 
 
