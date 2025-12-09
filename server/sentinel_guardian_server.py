@@ -31,14 +31,14 @@ class GPIOSignal:
 	@staticmethod
 	def init():
 
-		print("[DEBUG] GPIOSignal.init() - setting GPIO mode to BCM")
+		print("[DEBUG] GPIOSignal.init() - setting GPIO mode to BCM", flush=True)
 		GPIO.setmode(GPIO.BCM)
 
-		print("[DEBUG] GPIOSignal.init() - setup button")
+		print("[DEBUG] GPIOSignal.init() - setup button", flush=True)
 		GPIO.setup(GPIOSignal.BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 		GPIO.add_event_detect(GPIOSignal.BUTTON, GPIO.FALLING, callback=alarm, bouncetime=100)
 
-		print("[DEBUG] GPIOSignal.init() - setup beeper & LEDs")
+		print("[DEBUG] GPIOSignal.init() - setup beeper & LEDs", flush=True)
 		GPIO.setup(GPIOSignal.BEEPER, GPIO.OUT)
 		GPIO.setup(GPIOSignal.LED.RED, GPIO.OUT)
 		GPIO.setup(GPIOSignal.LED.BLUE, GPIO.OUT)
@@ -49,19 +49,19 @@ class GPIOSignal:
 		GPIO.output(GPIOSignal.LED.BLUE, GPIO.LOW)
 		GPIO.output(GPIOSignal.LED.GREEN, GPIO.LOW)
 
-		print("[DEBUG] GPIOSignal.init() - setup done")
+		print("[DEBUG] GPIOSignal.init() - setup done", flush=True)
 
 
 	@staticmethod
 	def _play_beep_pattern():
-		print("[DEBUG] GPIOSignal._play_beep_pattern() - beeper started")
+		print("[DEBUG] GPIOSignal._play_beep_pattern() - beeper started", flush=True)
 		for i in range(5):
 			GPIO.output(GPIOSignal.BEEPER, GPIO.HIGH)
 			time.sleep(0.1)
 			GPIO.output(GPIOSignal.BEEPER, GPIO.LOW)
 			time.sleep(0.1)
 
-		print("[DEBUG] GPIOSignal._play_beep_pattern() - beeper stopped")
+		print("[DEBUG] GPIOSignal._play_beep_pattern() - beeper stopped", flush=True)
 
 
 	@staticmethod
@@ -70,7 +70,7 @@ class GPIOSignal:
 		GPIO.output(GPIOSignal.LED.RED, GPIO.LOW)
 		ts_start = time.time()
 
-		print("[DEBUG] GPIOSignal._play_blink_pattern() - blink started")
+		print("[DEBUG] GPIOSignal._play_blink_pattern() - blink started", flush=True)
 
 		while (
 			(not g_EVENT_STOP_ALARM.is_set()) and
@@ -82,25 +82,25 @@ class GPIOSignal:
 			GPIO.output(GPIOSignal.LED.BLUE, GPIO.LOW)
 			time.sleep(0.45)
 
-		print("[DEBUG] GPIOSignal._play_blink_pattern() - blink stopped")
+		print("[DEBUG] GPIOSignal._play_blink_pattern() - blink stopped", flush=True)
 
-		print("[DEBUG] GPIOSignal._play_blink_pattern() - g_EVENT_STOP_ALARM.set()")
+		print("[DEBUG] GPIOSignal._play_blink_pattern() - g_EVENT_STOP_ALARM.set()", flush=True)
 		g_EVENT_STOP_ALARM.set()
 
 
 	@staticmethod
 	def _alarm():
 
-		print("[DEBUG] GPIOSignal._alarm() - setting up threads")
+		print("[DEBUG] GPIOSignal._alarm() - setting up threads", flush=True)
 		t_beeper = threading.Thread(target=GPIOSignal._play_beep_pattern)
 		t_LED = threading.Thread(target=GPIOSignal._play_blink_pattern)
-		print("[DEBUG] GPIOSignal._alarm() - starting threads")
+		print("[DEBUG] GPIOSignal._alarm() - starting threads", flush=True)
 		t_beeper.start()
 		t_LED.start()
-		print("[DEBUG] GPIOSignal._alarm() - awaiting threads")
+		print("[DEBUG] GPIOSignal._alarm() - awaiting threads", flush=True)
 		t_beeper.join()
 		t_LED.join()
-		print("[DEBUG] GPIOSignal._alarm() - threads complete")
+		print("[DEBUG] GPIOSignal._alarm() - threads complete", flush=True)
 
 		GPIO.output(GPIOSignal.BEEPER, GPIO.LOW)
 		GPIO.output(GPIOSignal.LED.BLUE, GPIO.LOW)
@@ -111,15 +111,15 @@ class GPIOSignal:
 		else:
 			GPIO.output(GPIOSignal.LED.RED, GPIO.HIGH)
 
-		print("[DEBUG] GPIOSignal._alarm() - response LED set")
+		print("[DEBUG] GPIOSignal._alarm() - response LED set", flush=True)
 		time.sleep(20)
 
-		print("[DEBUG] GPIOSignal._alarm() - LEDs turned off")
+		print("[DEBUG] GPIOSignal._alarm() - LEDs turned off", flush=True)
 		GPIO.output(GPIOSignal.LED.RED, GPIO.LOW)
 		GPIO.output(GPIOSignal.LED.BLUE, GPIO.LOW)
 		GPIO.output(GPIOSignal.LED.GREEN, GPIO.LOW)
 
-		print("[DEBUG] GPIOSignal._alarm() - clear all 3 events")
+		print("[DEBUG] GPIOSignal._alarm() - clear all 3 events", flush=True)
 		g_EVENT_STOP_ALARM.clear()
 		g_EVENT_USER_CANCELLED.clear()
 		g_ALARM_IN_PROGRESS.clear()
@@ -141,47 +141,47 @@ class Networking:
 
 	@staticmethod
 	def send_alarm(timestamp):
-		print("[DEBUG] Networking.send_alarm() - sending alarm")
+		print("[DEBUG] Networking.send_alarm() - sending alarm", flush=True)
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 		packet = struct.pack("!I", int(timestamp)) + Networking.START_ALARM
 		sock.sendto(packet, (Networking.BROADCAST_IP, Networking.BROADCAST_PORT))
 		sock.close()
-		print("[DEBUG] Networking.send_alarm() - socket closed")
+		print("[DEBUG] Networking.send_alarm() - socket closed", flush=True)
 
 	
 	@staticmethod
 	def send_cancel():
-		print("[DEBUG] Networking.send_cancel() - sending cancel")
+		print("[DEBUG] Networking.send_cancel() - sending cancel", flush=True)
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 		packet = struct.pack("!I", int(0)) + Networking.STOP_ALARM
 		sock.sendto(packet, (Networking.BROADCAST_IP, Networking.BROADCAST_PORT))
 		sock.close()
-		print("[DEBUG] Networking.send_cancel() - socket closed")
+		print("[DEBUG] Networking.send_cancel() - socket closed", flush=True)
 
 
 	@staticmethod
 	def _listen_for_cancel(sock):
-		print("[DEBUG] Networking._listen_for_cancel() - setting up socket")
+		print("[DEBUG] Networking._listen_for_cancel() - setting up socket", flush=True)
 		sock.settimeout(0.5)
 		sock.bind(("0.0.0.0", Networking.LISTEN_PORT))
-		print("[DEBUG] Networking._listen_for_cancel() - running listener loop")
+		print("[DEBUG] Networking._listen_for_cancel() - running listener loop", flush=True)
 		while not (g_EVENT_STOP_ALARM.is_set() or g_EVENT_USER_CANCELLED.is_set()):
 			try:
 				data, addr = sock.recvfrom(128)
 				print("[DEBUG] Networking._listen_for_cancel() - recieved data")
 
 				if data == Networking.STOP_ALARM:
-					print("[DEBUG] Networking._listen_for_cancel() - CANCEL recieved")
-					print("[DEBUG] Networking._listen_for_cancel() - setting g_EVENT_USER_CANCELLED")
+					print("[DEBUG] Networking._listen_for_cancel() - CANCEL recieved", flush=True)
+					print("[DEBUG] Networking._listen_for_cancel() - setting g_EVENT_USER_CANCELLED", flush=True)
 					g_EVENT_USER_CANCELLED.set()
 					 
 
 			except socket.timeout:
 				continue
 			except OSError:
-				print("[DEBUG] Networking._listen_for_cancel() - OSError")
+				print("[DEBUG] Networking._listen_for_cancel() - OSError", flush=True)
 				break # socket closed
 
 		
@@ -192,7 +192,7 @@ class Networking:
 		ts_start = int(time.time())
 
 		# start listener
-		print("[DEBUG] Networking._alarm() - setting up socket")
+		print("[DEBUG] Networking._alarm() - setting up socket", flush=True)
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		listener = threading.Thread(
 			target=Networking._listen_for_cancel,
@@ -200,30 +200,30 @@ class Networking:
 			daemon=True
 		)
 		listener.start()
-		print("[DEBUG] Networking._alarm() - started listener thread")
+		print("[DEBUG] Networking._alarm() - started listener thread", flush=True)
 
 		while not (g_EVENT_STOP_ALARM.is_set() or g_EVENT_USER_CANCELLED.is_set()):
 			
-			print("[DEBUG] Networking._alarm() - sending alarm")
+			print("[DEBUG] Networking._alarm() - sending alarm", flush=True)
 			Networking.send_alarm(ts_start)
-			print("[DEBUG] Networking._alarm() - sent alarm")
+			print("[DEBUG] Networking._alarm() - sent alarm", flush=True)
 			
 
 			# do a 5s sleep, but more responsive to the event
 			for i in range(10):
 				time.sleep(0.5)
 				if g_EVENT_STOP_ALARM.is_set() or g_EVENT_USER_CANCELLED.is_set():
-					print("[DEBUG] Networking._alarm() - a g_EVENT is set. Breaking sleep loop")
+					print("[DEBUG] Networking._alarm() - a g_EVENT is set. Breaking sleep loop", flush=True)
 					break
 
 		sock.close()
-		print("[DEBUG] Networking._alarm() - socket closed")
+		print("[DEBUG] Networking._alarm() - socket closed", flush=True)
 		listener.join()
-		print("[DEBUG] Networking._alarm() - listener thread complete")
+		print("[DEBUG] Networking._alarm() - listener thread complete", flush=True)
 
-		print("[DEBUG] Networking._alarm() - sending cancel")
+		print("[DEBUG] Networking._alarm() - sending cancel", flush=True)
 		Networking.send_cancel()
-		print("[DEBUG] Networking._alarm() - sent cancel")
+		print("[DEBUG] Networking._alarm() - sent cancel", flush=True)
 
 
 	@staticmethod
@@ -235,27 +235,27 @@ class Networking:
 g_ALARM_MUTEX = threading.Lock()
 def alarm(channel=None):
 
-	print("[DEBUG] alarm() - function called")
+	print("[DEBUG] alarm() - function called", flush=True)
 	if g_ALARM_IN_PROGRESS.is_set():
-		print("[DEBUG] alarm() - function returned due to alarm already in progress")
+		print("[DEBUG] alarm() - function returned due to alarm already in progress", flush=True)
 		return
 
 	if not g_ALARM_MUTEX.acquire(blocking=False):
-		print("[DEBUG] alarm() - function returned as mutex cannot be taken")
+		print("[DEBUG] alarm() - function returned as mutex cannot be taken", flush=True)
 		return
 
 	# should not need to clear here
 	# but do it just incase
-	print("[DEBUG] alarm() - clear events")
+	print("[DEBUG] alarm() - clear events", flush=True)
 	g_ALARM_IN_PROGRESS.set()
 	g_EVENT_STOP_ALARM.clear()
 	g_EVENT_USER_CANCELLED.clear()
 
-	print("[DEBUG] alarm() - starting GPIO and network alarms")
+	print("[DEBUG] alarm() - starting GPIO and network alarms", flush=True)
 	GPIOSignal.alarm()
 	Networking.alarm()
 
-	print("[DEBUG] alarm() - releasing mutex")
+	print("[DEBUG] alarm() - releasing mutex", flush=True)
 	g_ALARM_MUTEX.release()
 
 
@@ -274,9 +274,9 @@ def loop():
 
 if __name__ == "__main__":
 	try:
-		print("[DEBUG] Running init()")
+		print("[DEBUG] Running init()", flush=True)
 		init()
-		print("[DEBUG] Starting loop()")
+		print("[DEBUG] Starting loop()", flush=True)
 		while 1:
 			loop()
 	except KeyboardInterrupt:
