@@ -135,8 +135,8 @@ class Networking:
 	BROADCAST_PORT = 5005
 	LISTEN_PORT = 5006
 
-	START_ALARM = bytes([20])
-	STOP_ALARM = bytes([30])
+	START_ALARM = 20
+	STOP_ALARM = 30
 
 
 	@staticmethod
@@ -144,7 +144,7 @@ class Networking:
 		print("[DEBUG] Networking.send_alarm() - sending alarm", flush=True)
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-		packet = struct.pack("!I", int(timestamp)) + Networking.START_ALARM
+		packet = struct.pack("!I", int(timestamp)) + bytes([Networking.START_ALARM])
 		sock.sendto(packet, (Networking.BROADCAST_IP, Networking.BROADCAST_PORT))
 		sock.close()
 		print("[DEBUG] Networking.send_alarm() - socket closed", flush=True)
@@ -155,7 +155,7 @@ class Networking:
 		print("[DEBUG] Networking.send_cancel() - sending cancel", flush=True)
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-		packet = struct.pack("!I", int(0)) + Networking.STOP_ALARM
+		packet = struct.pack("!I", int(0)) + bytes([Networking.STOP_ALARM])
 		sock.sendto(packet, (Networking.BROADCAST_IP, Networking.BROADCAST_PORT))
 		sock.close()
 		print("[DEBUG] Networking.send_cancel() - socket closed", flush=True)
@@ -169,13 +169,16 @@ class Networking:
 		print("[DEBUG] Networking._listen_for_cancel() - running listener loop", flush=True)
 		while not (g_EVENT_STOP_ALARM.is_set() or g_EVENT_USER_CANCELLED.is_set()):
 			try:
-				data, addr = sock.recvfrom(128)
-				print("[DEBUG] Networking._listen_for_cancel() - recieved data")
+				raw_data, addr = sock.recvfrom(128)
+				data = int(bytes.decode(raw_data))
+				print("[DEBUG] Networking._listen_for_cancel() - recieved data: " + str(data), flush=True)
 
 				if data == Networking.STOP_ALARM:
 					print("[DEBUG] Networking._listen_for_cancel() - CANCEL recieved", flush=True)
 					print("[DEBUG] Networking._listen_for_cancel() - setting g_EVENT_USER_CANCELLED", flush=True)
 					g_EVENT_USER_CANCELLED.set()
+				else:
+					print("[DEBUG] Networking._listen_for_cancel() - raw_data does not match Networking.STOP_ALARM... ignoring", flush=True)
 					 
 
 			except socket.timeout:
@@ -183,6 +186,8 @@ class Networking:
 			except OSError:
 				print("[DEBUG] Networking._listen_for_cancel() - OSError", flush=True)
 				break # socket closed
+			except ValueError:
+				print("[ERROR] Networking._listen_for_cancel() - Could not cast data into an int", flush=True)
 
 		
 
