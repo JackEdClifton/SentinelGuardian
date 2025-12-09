@@ -2529,7 +2529,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
 			(at 106.68 107.442 90)
 			(effects
 				(font
@@ -2597,7 +2597,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "LED_THT:LED_D2.0mm_W4.0mm_H2.8mm_FlatTop"
 			(at 113.03 49.53 0)
 			(effects
 				(font
@@ -2654,7 +2654,7 @@
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
-		(on_board yes)
+		(on_board no)
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "410e9c5d-c337-439d-86d7-e5108a3d63d7")
@@ -2850,7 +2850,7 @@
 				)
 			)
 		)
-		(property "Value" "1k"
+		(property "Value" "1K"
 			(at 127 53.34 90)
 			(effects
 				(font
@@ -2858,7 +2858,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
 			(at 127 58.928 90)
 			(effects
 				(font
@@ -3199,7 +3199,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Button_Switch_THT:SW_PUSH_6mm_H8mm"
 			(at 119.38 76.2 0)
 			(effects
 				(font
@@ -3269,7 +3269,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "JC-Library:Buzzer-TMB12A05"
 			(at 153.67 102.235 90)
 			(effects
 				(font
@@ -3339,7 +3339,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "JC-Library:Buzzer-TMB12A05"
 			(at 153.67 114.935 90)
 			(effects
 				(font
@@ -3474,7 +3474,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "LED_THT:LED_D2.0mm_W4.0mm_H2.8mm_FlatTop"
 			(at 113.03 60.96 0)
 			(effects
 				(font
