@@ -1,31 +1,12 @@
 
 #include <Arduino.h>
 
-#include <WiFi.h>
-#include <WiFiUdp.h>
-
-#include "wifi_creds.h"
-
-const int UDP_PORT = 5005;
-const int UDP_RESPONSE_PORT = 5006;
+#include "networking.h"
+#include "LED_control.h"
 
 uint32_t g_ts_LAST_ALARM = 0;
 
-WiFiUDP udp;
-WiFiUDP udp_response;
 
-namespace DoorCodes {
-	const char* NO_DATA = "nodata";
-	const char* START_ALARM = "A";
-	const char* STOP_ALARM = "C";
-};
-
-
-const int GPIO_ALARM = 22;
-const int GPIO_BUTTON = 21;
-
-const int GPIO_LED_RED = 20;
-const int GPIO_LED_GREEN = 19;
 
 volatile bool g_EVENT_CANCEL_ALARM = false;
 
@@ -61,9 +42,7 @@ void stop_alarm() {
 
 	// send cancel packet to server
 	Serial.print("[DEBUG] stop_alarm() - send cancel packet to server\n");
-	udp_response.beginPacket("192.168.0.69", UDP_RESPONSE_PORT);
-	udp_response.print(DoorCodes::STOP_ALARM);
-	udp_response.endPacket();
+  send_stop_packet();
 
 	Serial.print("[DEBUG] stop_alarm() - unset alarm_active\n");
 	alarm_active = false;
@@ -101,74 +80,9 @@ void handle_alarm() {
 }
 
 
-void setup_wifi() {
-
-	const int WIFI_TIMEOUT_ms = 10000;
-
-	WiFi.disconnect();
-
-	WiFi.mode(WIFI_STA);
-	WiFi.begin(WIFI_SSID, WIFI_PASS);
-	Serial.print("[DEBUG] setup_wifi() - Connecting to wifi\n");
 
 
-	unsigned long ts_start = millis();
-	while (WiFi.status() != WL_CONNECTED && millis() - ts_start < WIFI_TIMEOUT_ms) {
-		delay(150);
 
-		// heartbeat red LED
-		int interval = digitalRead(GPIO_LED_RED) ? 250 : 250;
-		static unsigned long prev_millis = 0;
-		unsigned long current_millis = millis();
-		if (current_millis - prev_millis >= interval) {
-			prev_millis = current_millis;
-			digitalWrite(GPIO_LED_RED, !digitalRead(GPIO_LED_RED));
-		}
-	}
-
-	Serial.print("[DEBUG] setup_wifi() - Connected to wifi\n");
-
-	udp.begin(UDP_PORT);
-	udp_response.begin(UDP_RESPONSE_PORT);
-}
-
-
-struct UDPPacket {
-	uint32_t timestamp;
-	const char* message;
-
-	UDPPacket(uint32_t ts, const char* msg) {
-		this->timestamp = ts;
-		this->message = msg;
-	}
-};
-
-UDPPacket read_udp_packet() {
-
-	// verify data is available
-	int packet_size = udp.parsePacket();
-	if (!packet_size) {
-		return UDPPacket(0, DoorCodes::NO_DATA);
-	}
-
-	// read data packet
-	char buffer[128] = { 0 };
-	int len = udp.read(buffer, sizeof(buffer) - 1);
-
-	// verify at least the timestamp is present
-	if (len <= 4) {
-		Serial.print("[DEBUG] read_udp_packet() - insufficient data\n");
-		return UDPPacket(0, DoorCodes::NO_DATA);
-	}
-
-	// need to convert because of endianness
-	uint32_t timestamp = (buffer[0] << 24) | (buffer[1] << 16) | (buffer[2] << 8) | (buffer[3]);
-
-	// message is directly after the timestamp
-	const char* message = buffer + 4;
-
-	return UDPPacket(timestamp, message);
-}
 
 
 void setup() {
@@ -200,7 +114,7 @@ void loop() {
 	delay(10);
 
 	// handle wifi
-	if (WiFi.status() == WL_CONNECTED) {
+	if (is_wifi_connected()) {
 		if (!alarm_active) {
 			digitalWrite(GPIO_LED_RED, LOW);
 		}
