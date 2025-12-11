@@ -95,7 +95,7 @@ UDPPacket read_udp_packet() {
 
 void send_stop_packet() {
 	udp_response.beginPacket(SERVER_IP, UDP_RESPONSE_PORT);
-	udp_response.print(AlarmStatusCodes::STOP_ALARM);
+	udp_response.write(AlarmStatusCodes::STOP_ALARM);
 	udp_response.endPacket();
 }
 
