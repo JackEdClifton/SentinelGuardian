@@ -170,7 +170,7 @@ class Networking:
 		while not (g_EVENT_STOP_ALARM.is_set() or g_EVENT_USER_CANCELLED.is_set()):
 			try:
 				raw_data, addr = sock.recvfrom(128)
-				data = int(bytes.decode(raw_data))
+				data = raw_data[0] # get the first byte, that's all we care about
 				print("[DEBUG] Networking._listen_for_cancel() - recieved data: " + str(data), flush=True)
 
 				if data == Networking.STOP_ALARM:
@@ -186,10 +186,8 @@ class Networking:
 			except OSError:
 				print("[DEBUG] Networking._listen_for_cancel() - OSError", flush=True)
 				break # socket closed
-			except ValueError:
-				print("[ERROR] Networking._listen_for_cancel() - Could not cast data into an int", flush=True)
 
-		
+
 
 
 	@staticmethod
