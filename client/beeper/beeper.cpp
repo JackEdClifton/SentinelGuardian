@@ -139,8 +139,6 @@ void loop() {
 	// handle UDP messages
 	UDPPacket packet = read_udp_packet();
 
-	Serial.print("[DEBUG] loop() - parsing message\n");
-
 	if (packet.message == AlarmStatusCodes::START_ALARM) {
 		if (packet.timestamp > g_ts_LAST_ALARM) {
 			Serial.print("[DEBUG] loop() - new alarm packet recieved\n");
