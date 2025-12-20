@@ -8,6 +8,8 @@
 #include "wifi_creds.h"
 #include "LED_control.h"
 
+#include "logging.h"
+
 
 WiFiUDP udp;
 WiFiUDP udp_response;
@@ -40,7 +42,7 @@ void setup_wifi() {
 
 	WiFi.mode(WIFI_STA);
 	WiFi.begin(WIFI_SSID, WIFI_PASS);
-	Serial.print("[DEBUG] setup_wifi() - Connecting to wifi\n");
+	Logging::info(__func__, "Connecting to wifi");
 
 
 	unsigned long ts_start = millis();
@@ -49,7 +51,7 @@ void setup_wifi() {
 		heartbeat_RED_LED_tick();
 	}
 
-	Serial.print("[DEBUG] setup_wifi() - Connected to wifi\n");
+	Logging::info(__func__, "Connected to wifi");
 
 	udp.begin(UDP_PORT);
 	udp_response.begin(UDP_RESPONSE_PORT);
@@ -78,7 +80,7 @@ UDPPacket read_udp_packet() {
 
 	// verify at least the timestamp is present
 	if (len <= 4) {
-		Serial.print("[DEBUG] read_udp_packet() - insufficient data\n");
+		Logging::warn(__func__, "insufficient data size");
 		return UDPPacket(0, AlarmStatusCodes::NO_DATA);
 	}
 

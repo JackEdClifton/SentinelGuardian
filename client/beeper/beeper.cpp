@@ -3,6 +3,7 @@
 
 #include "networking.h"
 #include "LED_control.h"
+#include "logging.h"
 
 uint32_t g_ts_LAST_ALARM = 0;
 
@@ -14,39 +15,40 @@ unsigned long alarm_prev_millis = 0;
 bool alarm_active = false;
 
 void btn_pressed() {
-	Serial.print("[DEBUG] btn_pressed()\n");
+	Logging::Trace(__func__);
 	g_EVENT_CANCEL_ALARM = true;
 }
 
 void start_alarm() {
 
-	Serial.print("[DEBUG] start_alarm() - setting RED LED on\n");
+	Logging::Trace(__func__);
 
 	digitalWrite(GPIO_LED_RED, HIGH);
 	digitalWrite(GPIO_LED_GREEN, LOW);
 
 	alarm_prev_millis = millis();
-	Serial.print("[DEBUG] start_alarm() - set alarm_active\n");
+	Logging::debug(__func__, "set alarm active");
 	alarm_active = true;
-	Serial.print("[DEBUG] start_alarm() - unset g_EVENT_CANCEL_ALARM\n");
+	Logging::debug(__func__, "unset g_EVENT_CANCEL_ALARM");
 	g_EVENT_CANCEL_ALARM = false;
 }
 
 
 void stop_alarm() {
-	Serial.print("[DEBUG] stop_alarm() - disable buzzer & LEDs\n");
+	Logging::Trace(__func__);
+	Logging::debug(__func__, "disable buzzer & LEDs");
 	noTone(GPIO_ALARM);
 	digitalWrite(GPIO_ALARM, LOW);
 	digitalWrite(GPIO_LED_RED, LOW);
 	digitalWrite(GPIO_LED_GREEN, LOW);
 
 	// send cancel packet to server
-	Serial.print("[DEBUG] stop_alarm() - send cancel packet to server\n");
+	Logging::info(__func__, "send cancel packet to server");
   send_stop_packet();
 
-	Serial.print("[DEBUG] stop_alarm() - unset alarm_active\n");
+	Logging::debug(__func__, "unset alarm_active");
 	alarm_active = false;
-	Serial.print("[DEBUG] stop_alarm() - unset g_EVENT_CANCEL_ALARM\n");
+	Logging::debug(__func__, "unset g_EVENT_CANCEL_ALARM");
 	g_EVENT_CANCEL_ALARM = false;
 }
 
@@ -74,7 +76,7 @@ void handle_alarm() {
 	}
 
 	if (g_EVENT_CANCEL_ALARM) {
-		Serial.print("[DEBUG] handle_alarm() - g_EVENT_CANCEL_ALARM is set. Calling stop_alarm\n");
+		Logging::debug(__func__, "g_EVENT_CANCEL_ALARM is set. Calling stop_alarm");
 		stop_alarm();
 	}
 }
@@ -87,7 +89,7 @@ void handle_alarm() {
 
 void setup() {
 
-	Serial.begin(115200);
+	Logging::init();
 
 	// configure LEDs
 	pinMode(GPIO_LED_RED, OUTPUT);
@@ -141,18 +143,18 @@ void loop() {
 
 	if (packet.message == AlarmStatusCodes::START_ALARM) {
 		if (packet.timestamp > g_ts_LAST_ALARM) {
-			Serial.print("[DEBUG] loop() - new alarm packet recieved\n");
+			Logging::info(__func__, "new alarm packet recieved");
 			g_ts_LAST_ALARM = packet.timestamp;
-			Serial.print("[DEBUG] loop() - recieved packet START_ALARM\n");
+			Logging::info(__func__, "recieved packet START_ALARM");
 			start_alarm();
 		}
 		else {
-			Serial.print("[DEBUG] loop() - repeated alarm packet recieved\n");
+			Logging::info(__func__, "repeated alarm packet recieved");
 		}
 	}
 
 	if (packet.message == AlarmStatusCodes::STOP_ALARM) {
-		Serial.print("[DEBUG] loop() - recieved packet STOP_ALARM\n");
+		Logging::info(__func__, "recieved packet STOP_ALARM");
 		g_EVENT_CANCEL_ALARM = true;
 	}
 
