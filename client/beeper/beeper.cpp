@@ -99,7 +99,7 @@ void setup() {
 	// configure LEDs
 	pinMode(GPIO_LED_RED, OUTPUT);
 	pinMode(GPIO_LED_GREEN, OUTPUT);
-	digitalWrite(GPIO_LED_RED, HIGH);
+	digitalWrite(GPIO_LED_RED, LOW);
 	digitalWrite(GPIO_LED_GREEN, LOW);
 
 	// configure beeper
