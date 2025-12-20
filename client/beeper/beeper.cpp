@@ -1,5 +1,6 @@
 
 #include <Arduino.h>
+#include "hardware/clocks.h"
 
 #include "networking.h"
 #include "LED_control.h"
@@ -90,6 +91,10 @@ void handle_alarm() {
 void setup() {
 
 	Logging::init();
+
+	if (!set_sys_clock_khz(65000, true)) {
+		Logging::warn(__func__, "Failed to apply CPU clock freq");
+	}
 
 	// configure LEDs
 	pinMode(GPIO_LED_RED, OUTPUT);
