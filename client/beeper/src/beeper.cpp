@@ -92,10 +92,6 @@ void setup() {
 
 	Logging::init();
 
-	if (!set_sys_clock_khz(65000, true)) {
-		Logging::warn(__func__, "Failed to apply CPU clock freq");
-	}
-
 	// configure LEDs
 	pinMode(GPIO_LED_RED, OUTPUT);
 	pinMode(GPIO_LED_GREEN, OUTPUT);
