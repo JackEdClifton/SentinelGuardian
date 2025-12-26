@@ -11,7 +11,7 @@ from networking import NetworkSettings, Client
 from logging import Logging
 
 g_ALARM_BEEP_MAX_DURATION = 20
-
+g_MIN_BTN_PRESS_REPEAT_s = 10
 
 # store the list of clients
 # todo: may need to create a thread-safe class later
@@ -26,6 +26,12 @@ current_event_start_timestamp = None
 
 _button_press_event_lock = threading.Lock()
 def on_press(gpio_pin):
+	global current_event_start_timestamp
+
+	# rate limit
+	if current_event_start_timestamp:
+		if int(time.time()) - current_event_start_timestamp < g_MIN_BTN_PRESS_REPEAT_s:
+			return
 
 	if not _button_press_event_lock.acquire(blocking=False):
 		Logging.info("Ignoring duplicate door bell button press")
@@ -39,10 +45,10 @@ def on_press(gpio_pin):
 		_button_press_event_lock.release()
 		return
 
-	global current_event_start_timestamp
 	current_event_start_timestamp = int(time.time())
 
 	GPIOController.LED.blink_blue()
+	GPIOController.Beeper.start_beep_pattern()
 	
 	with _clients_lock:
 		for client in clients:
