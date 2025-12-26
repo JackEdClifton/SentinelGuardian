@@ -54,7 +54,7 @@ class Client:
 		self.last_packet_real_ts = int(time.time())
 		self.last_packet_event_ts = int(time.time())
 		self.last_packet_state = state
-		self.consecutive_packets_missed = 0
+		self.last_ack_packet_sent_ts = 0
 
 
 	def send_packet(self, timestamp: int, state: int):
@@ -62,7 +62,7 @@ class Client:
 		if type(timestamp) != int:
 			raise TypeError(f"timestamp must be an 'int'. Not {type(timestamp)} {timestamp}")
 		
-		if type(state) != int:
+		if type(state) != int and type(state) != NetworkSettings.State:
 			raise TypeError(f"state must be an 'int'. Not {type(state)} {state}")
 
 		if state > 255 or state < 0:

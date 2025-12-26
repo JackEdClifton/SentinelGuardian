@@ -1,5 +1,6 @@
 
 import inspect
+import datetime
 
 # Log levels
 LOG_LEVEL_DISABLED = 0
@@ -10,7 +11,7 @@ LOG_LEVEL_DEBUG    = 4
 LOG_LEVEL_TRACE    = 5
 
 # Set desired log level here
-LOG_LEVEL = LOG_LEVEL_DISABLED
+LOG_LEVEL = LOG_LEVEL_TRACE
 
 def _caller_name(depth=2) -> str:
 	frame = inspect.currentframe()
@@ -26,32 +27,33 @@ class Logging:
 	def _log(log_level: str, msg: str):
 		if LOG_LEVEL > LOG_LEVEL_DISABLED:
 			func_name = _caller_name()
-			print(f"[{log_level}] {func_name}() - {msg}", flush=True)
+			current_time = datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+			print(f"[{current_time}] [{log_level}] {func_name}() - {msg}", flush=True)
 
 
 	def trace(msg: str):
 		if LOG_LEVEL >= LOG_LEVEL_TRACE:
-			_log("TRACE", msg)
+			Logging._log("TRACE", msg)
 
 
 	def debug(msg: str):
 		if LOG_LEVEL >= LOG_LEVEL_DEBUG:
-			_log("DEBUG", msg)
+			Logging._log("DEBUG", msg)
 
 
 	def info(msg: str):
 		if LOG_LEVEL >= LOG_LEVEL_INFO:
-			_log("INFO", msg)
+			Logging._log("INFO", msg)
 
 
 	def warn(msg: str):
 		if LOG_LEVEL >= LOG_LEVEL_WARN:
-			_log("WARN", msg)
+			Logging._log("WARN", msg)
 
 
 	def error(msg: str):
 		if LOG_LEVEL >= LOG_LEVEL_ERROR:
-			_log("ERROR", msg)
+			Logging._log("ERROR", msg)
 
 
 

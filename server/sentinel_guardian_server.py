@@ -8,7 +8,7 @@ import threading
 
 from gpio_controller import GPIOController
 from networking import NetworkSettings, Client
-
+from logging import Logging
 
 g_ALARM_BEEP_MAX_DURATION = 20
 
@@ -25,9 +25,18 @@ clients = []
 current_event_start_timestamp = None
 
 _button_press_event_lock = threading.Lock()
-def on_press():
+def on_press(gpio_pin):
 
 	if not _button_press_event_lock.acquire(blocking=False):
+		Logging.info("Ignoring duplicate door bell button press")
+		return
+
+	Logging.info("Door bell button is pressed")
+
+	if not len(clients):
+		GPIOController.LED.set_red()
+		Logging.warn("Door bell set to RED due to no clients available")
+		_button_press_event_lock.release()
 		return
 
 	global current_event_start_timestamp
@@ -63,8 +72,9 @@ def handle_packet(packet):
 		Logging.info("Ignoring old packet")
 		return
 
-	# try to find client
 	with _clients_lock:
+		
+		# try to find client
 		client = None
 		for loop_client in clients:
 			if loop_client.ip_address == packet.ip_address:
@@ -123,6 +133,7 @@ def handle_packet(packet):
 				Logging.error("Non-existing client send us an IDLE/heartbeat packet. Should not be possible")
 				return
 			
+			Logging.debug(f"Alive ACK recieved from {packet.ip_address}")
 			client.update_last_seen_ts()
 
 
@@ -134,6 +145,8 @@ def cleanup():
 
 
 def init():
+
+	Logging.info("Init function reached")
 	
 	GPIOController.init(on_press_callback=on_press)
 	
@@ -169,8 +182,12 @@ def loop():
 				del clients[clients_index]
 			
 			elif time_since_last_packet > NetworkSettings.SEND_IDLE_ACK_AFTER_DURATION:
-				Logging.debug(f"Pinging client at {clients[clients_index].ip_address} to check it's alive")
-				clients[clients_index].send_packet(0, NetworkSettings.State.IDLE)
+
+				# rate limit to one ping every x seconds
+				if int(time.time()) - clients[clients_index].last_ack_packet_sent_ts > 20:
+					Logging.debug(f"Pinging client at {clients[clients_index].ip_address} to check it's alive")
+					clients[clients_index].last_ack_packet_sent_ts = int(time.time())
+					clients[clients_index].send_packet(0, NetworkSettings.State.IDLE)
 	
 	
 	# handle alarm timeout
