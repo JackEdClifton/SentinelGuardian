@@ -10,198 +10,226 @@ import pystray
 from PIL import Image, ImageTk
 
 # ----------------- CONFIG -----------------
-SERVER_IP = "192.168.0.69"
-BROADCAST_PORT = 5005
-RESPONSE_PORT = 5006
-
-SEEKING_INTERVAL = 5.0  # seconds between SEEKING_CONNECTION if no packets
-PROTOCOL_VERSION = 1
-
-# Network states
-SEEKING_CONNECTION = 10
-CONNECTION_ACCEPTED = 11
-START_BEEP = 20
-STOP_BEEP = 21
-IDLE = 30
 
 AUDIO_FILE = "assets/door_desk.mp3"
 
+
+class Packet:
+	def __init__(self, recvfrom_data, recvfrom_addr):
+		try:
+			self.protocol_ver, self.event_timestamp, self.state = struct.unpack("!BIB", recvfrom_data[:6])
+		except struct.error:
+			raise ValueError("Invalid packet length")
+
+		self.ip_address = recvfrom_addr[0]
+
+
+
+class Network:
+	PROTOCOL_VERSION = 1
+	SERVER_IP = "192.168.0.69"
+	
+	class Port:
+		INBOUND = 5005
+		OUTBOUND = 5006
+
+
+	class State:
+		SEEKING_CONNECTION = 10
+		CONNECTION_ACCEPTED = 11
+		START_BEEP = 20
+		STOP_BEEP = 21
+		IDLE = 30
+
+	@staticmethod
+	def send_packet(timestamp: int, state: int):
+		if type(timestamp) != int:
+			raise TypeError(f"timestamp must be an 'int'. Not {type(timestamp)} {timestamp}")
+		
+		if type(state) != int and type(state) != Network.State:
+			raise TypeError(f"state must be an 'int'. Not {type(state)} {state}")
+
+		if state > 255 or state < 0:
+			raise ValueError(f"state must be 0 <= state <= 255. Not {state}")
+		
+		print(f"Sending packet {timestamp} - {state}")
+
+		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+		packet = struct.pack("!BIB", Network.PROTOCOL_VERSION, timestamp, state)
+		sock.sendto(packet, (Network.SERVER_IP, Network.Port.OUTBOUND))
+		sock.close()
+	
+
+	@staticmethod
+	def packet_listener(callback):
+		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		sock.bind(("0.0.0.0", Network.Port.INBOUND))
+
+		print("Listening for packets")
+
+		while True:
+			data, addr = sock.recvfrom(128)
+
+			packet = Packet(data, addr)
+			callback(packet)
+
+
+
+class Timers:
+	current_event_start_timestamp = 0
+	last_packet_received_timestamp = 0
+	last_seeking_conneciton_packet_sent_timestamp = 0
+	MAX_ACK_INTERVAL_ms = 1000 * (90 + 10)
+	SEEKING_CONNECTION_REQUEST_INTERVAL_ms = 5000
+
+
+
 # ----------------- DESKTOP APP -----------------
 class DeskDashApp:
-    def __init__(self):
-        self.last_timestamp = 0
-        self.last_packet_time = 0
-        self.pending_stop = False
+	def __init__(self):
+		self.last_timestamp = 0
+		self.last_packet_time = 0
+		self.pending_stop = False
 
-        # Tkinter setup
-        self.root = tk.Tk()
-        self.root.title("DeskDash")
-        self.root.geometry("360x160")
-        self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
-        self.root.attributes('-topmost', True)
-        self.root.withdraw()
+		# Tkinter setup
+		self.root = tk.Tk()
+		self.root.title("DeskDash")
+		self.root.geometry("360x160")
+		self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
+		self.root.attributes('-topmost', True)
+		self.root.withdraw()
 
-        tk.Label(self.root, text="Someone is at the door!", font=("Segoe UI", 14)).pack(pady=15)
-        btn_frame = tk.Frame(self.root)
-        btn_frame.pack(pady=5)
-        tk.Button(btn_frame, text="Answer", font=("Segoe UI", 12), width=10, command=self.answer).grid(row=0, column=0, padx=10)
-        tk.Button(btn_frame, text="Ignore", font=("Segoe UI", 12), width=10, command=self.ignore).grid(row=0, column=1, padx=10)
+		tk.Label(self.root, text="Someone is at the door!", font=("Segoe UI", 14)).pack(pady=15)
+		btn_frame = tk.Frame(self.root)
+		btn_frame.pack(pady=5)
+		tk.Button(btn_frame, text="Answer", font=("Segoe UI", 12), width=10, command=self.answer).grid(row=0, column=0, padx=10)
+		tk.Button(btn_frame, text="Ignore", font=("Segoe UI", 12), width=10, command=self.ignore).grid(row=0, column=1, padx=10)
 
-        # Icon / tray
-        self.icon_img = Image.open("assets/door_desk.ico")
-        self.tk_icon = ImageTk.PhotoImage(self.icon_img)
-        self.root.iconphoto(False, self.tk_icon)
-        self.tray_icon = pystray.Icon(
-            "DeskDash",
-            self.icon_img,
-            "DeskDash",
-            menu=pystray.Menu(pystray.MenuItem("Quit", self.quit_app))
-        )
+		# Icon / tray
+		self.icon_img = Image.open("assets/door_desk.ico")
+		self.tk_icon = ImageTk.PhotoImage(self.icon_img)
+		self.root.iconphoto(False, self.tk_icon)
+		self.tray_icon = pystray.Icon(
+			"DeskDash",
+			self.icon_img,
+			"DeskDash",
+			menu=pystray.Menu(pystray.MenuItem("Quit", self.quit_app))
+		)
 
-        # Sound
-        pygame.mixer.init()
+		# Sound
+		pygame.mixer.init()
 
-        # Threads
-        threading.Thread(target=self.listen_udp, daemon=True).start()
-        threading.Thread(target=self.send_seeking_loop, daemon=True).start()
-        threading.Thread(target=self.tray_icon.run, daemon=True).start()
+		# Threads
+		threading.Thread(target=Network.packet_listener, args=(self.handle_packet,), daemon=True).start()
+		threading.Thread(target=self.tray_icon.run, daemon=True).start()
+		time.sleep(1) # just to make sure the listening thread has started
+		threading.Thread(target=self.send_seeking_loop, daemon=True).start()
 
-    # ----------------- UDP LISTENER -----------------
-    def listen_udp(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind(("", BROADCAST_PORT))
+	# ----------------- UDP LISTENER -----------------
+	def handle_packet(self, packet):
 
-        while True:
-            try:
-                data, addr = sock.recvfrom(1024)
-                if len(data) < 6:
-                    continue
+		try:
 
-                proto, timestamp, state = struct.unpack("!BIB", data[:6])
+			if packet.protocol_ver != Network.PROTOCOL_VERSION:
+				return
 
-                if proto != PROTOCOL_VERSION:
-                    continue
+			# Ignore duplicates
+			if packet.event_timestamp != 0 and packet.event_timestamp <= self.last_timestamp:
+				return
 
-                # Ignore duplicates
-                if timestamp != 0 and timestamp <= self.last_timestamp:
-                    continue
 
-                self.last_timestamp = timestamp
-                self.last_packet_time = time.time()
+			if packet.state == Network.State.START_BEEP:
+				print("stat beep packet")
+				self.trigger_alarm()  # only call on 0, new packets cause audio to reset
+				Timers.current_event_start_timestamp = packet.event_timestamp
+				Timers.last_packet_received_timestamp = time.time()
+				Network.send_packet(packet.event_timestamp, packet.state)
 
-                if state == START_BEEP:
-                    self.trigger_alarm()
-                    self.send_idle(timestamp)
+			elif packet.state == Network.State.STOP_BEEP:
+				print("stop beep packet]")
+				self.stop_sound()
+				self.hide_window()
+				self.pending_stop = False
+				Timers.current_event_start_timestamp = packet.event_timestamp
+				Network.send_packet(packet.event_timestamp, packet.state)
 
-                elif state == STOP_BEEP:
-                    self.pending_stop = False
-                    self.stop_sound()
-                    self.hide_window()
-                    self.send_idle(timestamp)
+			elif packet.state == Network.State.IDLE:
+				print("recieved idle packet")
+				Timers.last_packet_received_timestamp = time.time()
+				Network.send_packet(packet.event_timestamp, packet.state)
 
-                elif state == IDLE:
-                    self.send_idle(timestamp)
+			elif packet.state == Network.State.CONNECTION_ACCEPTED:
+				print("connection is accepted")
+				Timers.last_packet_received_timestamp = time.time()
 
-                elif state == CONNECTION_ACCEPTED:
-                    # Can mostly be ignored
-                    pass
+			elif packet.state == Network.State.SEEKING_CONNECTION:
+				# Should not happen
+				print("Unexpected SEEKING_CONNECTION from server")
+				return
 
-                elif state == SEEKING_CONNECTION:
-                    # Should not happen
-                    print("Unexpected SEEKING_CONNECTION from server")
+		except Exception:
+			traceback.print_exc()
+			time.sleep(1)
 
-            except Exception:
-                traceback.print_exc()
-                time.sleep(1)
+	# ----------------- SEEKING CONNECTION -----------------
+	def send_seeking_loop(self):
+		while True:
+			current_time = time.time()
+			if current_time - Timers.last_packet_received_timestamp > Timers.MAX_ACK_INTERVAL_ms:
+				if current_time - Timers.last_seeking_conneciton_packet_sent_timestamp > Timers.SEEKING_CONNECTION_REQUEST_INTERVAL_ms:
+					Network.send_packet(0, Network.State.SEEKING_CONNECTION)
+					Timers.last_seeking_conneciton_packet_sent_timestamp = current_time
 
-    # ----------------- SEEKING CONNECTION -----------------
-    def send_seeking_loop(self):
-        while True:
-            current_time = time.time()
-            if current_time - self.last_packet_time > SEEKING_INTERVAL:
-                try:
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    sock.sendto(
-                        struct.pack("!BIB", PROTOCOL_VERSION, 0, SEEKING_CONNECTION),
-                        (SERVER_IP, RESPONSE_PORT)
-                    )
-                    sock.close()
-                except Exception:
-                    traceback.print_exc()
+			time.sleep(1)
 
-                self.last_packet_time = current_time
+	# ----------------- BEHAVIOR -----------------
+	def trigger_alarm(self):
+		self.play_sound()
+		self.root.after(0, self.force_show_window)
 
-            time.sleep(1)
+	def force_show_window(self):
+		self.root.deiconify()
+		self.root.lift()
+		self.root.attributes("-topmost", True)
+		self.root.after(200, lambda: self.root.attributes("-topmost", False))
 
-    # ----------------- BEHAVIOR -----------------
-    def trigger_alarm(self):
-        self.play_sound()
-        self.root.after(0, self.force_show_window)
+	def hide_window(self):
+		self.root.withdraw()
 
-    def force_show_window(self):
-        self.root.deiconify()
-        self.root.lift()
-        self.root.attributes("-topmost", True)
-        self.root.after(200, lambda: self.root.attributes("-topmost", False))
+	def quit_app(self, icon=None, item=None):
+		self.stop_sound()
+		self.tray_icon.stop()
+		self.root.quit()
+		sys.exit(0)
 
-    def hide_window(self):
-        self.root.withdraw()
+	# ----------------- SOUND -----------------
+	def play_sound(self):
+		try:
+			pygame.mixer.music.load(AUDIO_FILE)
+			pygame.mixer.music.play(-1)
+		except Exception as e:
+			print("Failed to play sound:", e)
 
-    def quit_app(self, icon=None, item=None):
-        self.stop_sound()
-        self.tray_icon.stop()
-        self.root.quit()
-        sys.exit(0)
+	def stop_sound(self):
+		pygame.mixer.music.stop()
 
-    # ----------------- SOUND -----------------
-    def play_sound(self):
-        try:
-            pygame.mixer.music.load(AUDIO_FILE)
-            pygame.mixer.music.play(-1)
-        except Exception as e:
-            print("Failed to play sound:", e)
+	# ----------------- BUTTONS -----------------
+	def answer(self):
+		self.pending_stop = True
+		Network.send_packet(Timers.current_event_start_timestamp, Network.State.STOP_BEEP)
 
-    def stop_sound(self):
-        pygame.mixer.music.stop()
+	def ignore(self):
+		self.stop_sound()
+		self.hide_window()
 
-    # ----------------- BUTTONS -----------------
-    def answer(self):
-        self.pending_stop = True
-        self.send_stop_packet()
 
-    def ignore(self):
-        self.stop_sound()
-        self.hide_window()
-
-    # ----------------- UDP SENDERS -----------------
-    def send_idle(self, timestamp):
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(
-                struct.pack("!BIB", PROTOCOL_VERSION, timestamp, IDLE),
-                (SERVER_IP, RESPONSE_PORT)
-            )
-            sock.close()
-        except Exception:
-            traceback.print_exc()
-
-    def send_stop_packet(self):
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(
-                struct.pack("!BIB", PROTOCOL_VERSION, self.last_timestamp, STOP_BEEP),
-                (SERVER_IP, RESPONSE_PORT)
-            )
-            sock.close()
-        except Exception:
-            traceback.print_exc()
-
-    # ----------------- MAIN LOOP -----------------
-    def run(self):
-        self.root.mainloop()
+	# ----------------- MAIN LOOP -----------------
+	def run(self):
+		self.root.mainloop()
 
 
 # ----------------- RUN -----------------
 if __name__ == "__main__":
-    app = DeskDashApp()
-    app.run()
+	app = DeskDashApp()
+	app.run()
