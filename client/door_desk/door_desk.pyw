@@ -2,168 +2,194 @@ import socket
 import struct
 import threading
 import tkinter as tk
-from tkinter import messagebox
 import pygame
 import time
 import sys
-import os
 import traceback
 import pystray
 from PIL import Image, ImageTk
 
+# ----------------- CONFIG -----------------
+SERVER_IP = "192.168.0.69"
 BROADCAST_PORT = 5005
 RESPONSE_PORT = 5006
-SERVER_IP = "192.168.0.69"
 
-START_ALARM = 20
-STOP_ALARM = 30
+SEEKING_INTERVAL = 5.0  # seconds between SEEKING_CONNECTION if no packets
+
+# Network states
+SEEKING_CONNECTION = 10
+CONNECTION_ACCEPTED = 11
+START_BEEP = 20
+STOP_BEEP = 21
+IDLE = 30
 
 AUDIO_FILE = "assets/door_desk.mp3"
 
-
+# ----------------- DESKTOP APP -----------------
 class DeskDashApp:
-	def __init__(self):
-		# Track last timestamp to ignore duplicates
-		self.last_timestamp = None
+    def __init__(self):
+        # Track last timestamp to ignore duplicates
+        self.last_timestamp = 0
+        self.last_packet_time = 0
+        self.pending_stop = False  # True if user pressed "Answer" but waiting for server STOP_BEEP
 
-		# Window hidden by default
-		self.root = tk.Tk()
-		self.root.title("DeskDash")
-		self.root.geometry("360x160")
-		self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
-		self.root.attributes('-topmost', True)
-		self.root.withdraw()
+        # Tkinter setup
+        self.root = tk.Tk()
+        self.root.title("DeskDash")
+        self.root.geometry("360x160")
+        self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
+        self.root.attributes('-topmost', True)
+        self.root.withdraw()
 
-		# UI buttons
-		tk.Label(self.root, text="Someone is at the door!", font=("Segoe UI", 14)).pack(pady=15)
+        tk.Label(self.root, text="Someone is at the door!", font=("Segoe UI", 14)).pack(pady=15)
+        btn_frame = tk.Frame(self.root)
+        btn_frame.pack(pady=5)
+        tk.Button(btn_frame, text="Answer", font=("Segoe UI", 12), width=10, command=self.answer).grid(row=0, column=0, padx=10)
+        tk.Button(btn_frame, text="Ignore", font=("Segoe UI", 12), width=10, command=self.ignore).grid(row=0, column=1, padx=10)
 
-		btn_frame = tk.Frame(self.root)
-		btn_frame.pack(pady=5)
+        # Icon / tray
+        self.icon_img = Image.open("assets/door_desk.ico")
+        self.tk_icon = ImageTk.PhotoImage(self.icon_img)
+        self.root.iconphoto(False, self.tk_icon)
+        self.tray_icon = pystray.Icon("DeskDash", self.icon_img, "DeskDash",
+                                      menu=pystray.Menu(pystray.MenuItem("Quit", self.quit_app)))
 
-		tk.Button(btn_frame, text="Answer", font=("Segoe UI", 12), width=10, command=self.answer).grid(row=0, column=0, padx=10)
-		tk.Button(btn_frame, text="Ignore", font=("Segoe UI", 12), width=10, command=self.ignore).grid(row=0, column=1, padx=10)
+        # Sound
+        pygame.mixer.init()
 
-		# Load main icon
-		self.icon_img = Image.open("assets/door_desk.ico")
-		self.tk_icon = ImageTk.PhotoImage(self.icon_img)
-		self.root.iconphoto(False, self.tk_icon)
+        # UDP listener
+        self.listener_thread = threading.Thread(target=self.listen_udp, daemon=True)
+        self.listener_thread.start()
 
-		# Tray icon setup
-		self.tray_icon = pystray.Icon("DeskDash",
-			self.icon_img,
-			"DeskDash",
-			menu=pystray.Menu(pystray.MenuItem("Quit", self.quit_app))
-		)
+        # SEEKING_CONNECTION sender
+        self.seeker_thread = threading.Thread(target=self.send_seeking_loop, daemon=True)
+        self.seeker_thread.start()
 
-		# Start pygame sound system
-		pygame.mixer.init()
+        # Tray icon
+        threading.Thread(target=self.tray_icon.run, daemon=True).start()
 
-		# Background listener thread
-		self.listener_thread = threading.Thread(target=self.listen_udp, daemon=True)
-		self.listener_thread.start()
+    # ----------------- UDP LISTENER -----------------
+    def listen_udp(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(("", BROADCAST_PORT))
 
-		# Tray icon thread
-		threading.Thread(target=self.tray_icon.run, daemon=True).start()
+        while True:
+            try:
+                data, addr = sock.recvfrom(1024)
+                if len(data) < 5:
+                    continue
 
-	# ==========================================================
-	# UDP LISTENER
-	# ==========================================================
-	def listen_udp(self):
-		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		sock.bind(("", BROADCAST_PORT))
+                timestamp, state = struct.unpack("!IB", data[:5])
 
-		while True:
-			try:
-				data, addr = sock.recvfrom(1024)
-				if len(data) < 5:
-					continue
+                # Ignore duplicates
+                if timestamp <= self.last_timestamp:
+                    continue
+                self.last_timestamp = timestamp
+                self.last_packet_time = time.time()
 
-				timestamp = struct.unpack("!I", data[:4])[0]
-				code = data[4]
+                # Handle states
+                if state == START_BEEP:
+                    self.trigger_alarm()
+                    self.send_idle(timestamp)
+                elif state == STOP_BEEP:
+                    if self.pending_stop:
+                        self.pending_stop = False
+                    self.stop_sound()
+                    self.hide_window()
+                    self.send_idle(timestamp)
+                elif state == IDLE:
+                    self.send_idle(timestamp)
+                elif state == CONNECTION_ACCEPTED:
+                    print("Connection accepted by server")
+                elif state == SEEKING_CONNECTION:
+                    # Server should not send this, just log
+                    print("Received SEEKING_CONNECTION from server (unexpected)")
+                else:
+                    print("Unknown state:", state)
 
-				if code == START_ALARM:
-					if timestamp != self.last_timestamp:
-						self.last_timestamp = timestamp
-						self.trigger_alarm()
+            except Exception:
+                traceback.print_exc()
+                time.sleep(1)
 
-				elif code == STOP_ALARM:
-					self.stop_sound()
-					self.hide_window()
+    # ----------------- SEEKING CONNECTION -----------------
+    def send_seeking_loop(self):
+        while True:
+            current_time = time.time()
+            if current_time - self.last_packet_time > SEEKING_INTERVAL:
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    sock.sendto(struct.pack("!IB", 0, SEEKING_CONNECTION), (SERVER_IP, RESPONSE_PORT))
+                    sock.close()
+                    # print("Sent SEEKING_CONNECTION")
+                except Exception:
+                    traceback.print_exc()
+                self.last_packet_time = current_time
+            time.sleep(1)
 
-			except Exception:
-				traceback.print_exc()
-				time.sleep(1)
+    # ----------------- BEHAVIOR -----------------
+    def trigger_alarm(self):
+        self.play_sound()
+        self.root.after(0, self.force_show_window)
 
-	# ==========================================================
-	# BEHAVIOR
-	# ==========================================================
-	def trigger_alarm(self):
-		self.play_sound()
+    def force_show_window(self):
+        self.root.deiconify()
+        self.root.lift()
+        self.root.attributes("-topmost", True)
+        self.root.after(200, lambda: self.root.attributes("-topmost", False))
 
-		# Show window on main thread
-		self.root.after(0, self.force_show_window)
+    def hide_window(self):
+        self.root.withdraw()
 
-	def force_show_window(self):
-		self.root.deiconify()
-		self.root.lift()
-		self.root.attributes("-topmost", True)
-		self.root.after(200, lambda: self.root.attributes("-topmost", False))
+    def quit_app(self, icon=None, item=None):
+        self.stop_sound()
+        self.tray_icon.stop()
+        self.root.quit()
+        sys.exit(0)
 
-	def hide_window(self):
-		self.root.withdraw()
+    # ----------------- SOUND -----------------
+    def play_sound(self):
+        try:
+            pygame.mixer.music.load(AUDIO_FILE)
+            pygame.mixer.music.play(-1)
+        except Exception as e:
+            print("Failed to play sound:", e)
 
-	def quit_app(self, icon=None, item=None):
-		self.stop_sound()
-		self.tray_icon.stop()
-		self.root.quit()
-		sys.exit(0)
+    def stop_sound(self):
+        pygame.mixer.music.stop()
 
-	# ==========================================================
-	# SOUND
-	# ==========================================================
-	def play_sound(self):
-		try:
-			pygame.mixer.music.load(AUDIO_FILE)
-			pygame.mixer.music.play(-1)
-		except Exception as e:
-			print("Failed to play sound:", e)
+    # ----------------- BUTTONS -----------------
+    def answer(self):
+        self.pending_stop = True
+        self.send_stop_packet()
+        # Do NOT stop alarm yet, wait for server STOP_BEEP
 
-	def stop_sound(self):
-		pygame.mixer.music.stop()
+    def ignore(self):
+        self.stop_sound()
+        self.hide_window()
 
-	# ==========================================================
-	# BUTTONS
-	# ==========================================================
-	def answer(self):
-		self.stop_sound()
-		self.send_stop_packet()
-		self.hide_window()
+    # ----------------- UDP SENDERS -----------------
+    def send_idle(self, timestamp):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(struct.pack("!IB", timestamp, IDLE), (SERVER_IP, RESPONSE_PORT))
+            sock.close()
+        except Exception:
+            traceback.print_exc()
 
-	def ignore(self):
-		self.stop_sound()
-		self.hide_window()
+    def send_stop_packet(self):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(struct.pack("!IB", self.last_timestamp, STOP_BEEP), (SERVER_IP, RESPONSE_PORT))
+            sock.close()
+        except Exception:
+            traceback.print_exc()
 
-	# ==========================================================
-	# SEND UDP TO SERVER
-	# ==========================================================
-	def send_stop_packet(self):
-		try:
-			sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			sock.sendto(bytes([STOP_ALARM]), (SERVER_IP, RESPONSE_PORT))
-			sock.close()
-		except Exception:
-			traceback.print_exc()
-
-	# ==========================================================
-	# MAIN LOOP
-	# ==========================================================
-	def run(self):
-		self.root.mainloop()
+    # ----------------- MAIN LOOP -----------------
+    def run(self):
+        self.root.mainloop()
 
 
-# ----------------------------------------------------------
-# RUN THE APP
-# ----------------------------------------------------------
+# ----------------- RUN -----------------
 if __name__ == "__main__":
-	app = DeskDashApp()
-	app.run()
+    app = DeskDashApp()
+    app.run()
