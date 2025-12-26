@@ -15,6 +15,7 @@ BROADCAST_PORT = 5005
 RESPONSE_PORT = 5006
 
 SEEKING_INTERVAL = 5.0  # seconds between SEEKING_CONNECTION if no packets
+PROTOCOL_VERSION = 1
 
 # Network states
 SEEKING_CONNECTION = 10
@@ -28,10 +29,9 @@ AUDIO_FILE = "assets/door_desk.mp3"
 # ----------------- DESKTOP APP -----------------
 class DeskDashApp:
     def __init__(self):
-        # Track last timestamp to ignore duplicates
         self.last_timestamp = 0
         self.last_packet_time = 0
-        self.pending_stop = False  # True if user pressed "Answer" but waiting for server STOP_BEEP
+        self.pending_stop = False
 
         # Tkinter setup
         self.root = tk.Tk()
@@ -51,21 +51,19 @@ class DeskDashApp:
         self.icon_img = Image.open("assets/door_desk.ico")
         self.tk_icon = ImageTk.PhotoImage(self.icon_img)
         self.root.iconphoto(False, self.tk_icon)
-        self.tray_icon = pystray.Icon("DeskDash", self.icon_img, "DeskDash",
-                                      menu=pystray.Menu(pystray.MenuItem("Quit", self.quit_app)))
+        self.tray_icon = pystray.Icon(
+            "DeskDash",
+            self.icon_img,
+            "DeskDash",
+            menu=pystray.Menu(pystray.MenuItem("Quit", self.quit_app))
+        )
 
         # Sound
         pygame.mixer.init()
 
-        # UDP listener
-        self.listener_thread = threading.Thread(target=self.listen_udp, daemon=True)
-        self.listener_thread.start()
-
-        # SEEKING_CONNECTION sender
-        self.seeker_thread = threading.Thread(target=self.send_seeking_loop, daemon=True)
-        self.seeker_thread.start()
-
-        # Tray icon
+        # Threads
+        threading.Thread(target=self.listen_udp, daemon=True).start()
+        threading.Thread(target=self.send_seeking_loop, daemon=True).start()
         threading.Thread(target=self.tray_icon.run, daemon=True).start()
 
     # ----------------- UDP LISTENER -----------------
@@ -76,36 +74,41 @@ class DeskDashApp:
         while True:
             try:
                 data, addr = sock.recvfrom(1024)
-                if len(data) < 5:
+                if len(data) < 6:
                     continue
 
-                timestamp, state = struct.unpack("!IB", data[:5])
+                proto, timestamp, state = struct.unpack("!BIB", data[:6])
+
+                if proto != PROTOCOL_VERSION:
+                    continue
 
                 # Ignore duplicates
-                if timestamp <= self.last_timestamp:
+                if timestamp != 0 and timestamp <= self.last_timestamp:
                     continue
+
                 self.last_timestamp = timestamp
                 self.last_packet_time = time.time()
 
-                # Handle states
                 if state == START_BEEP:
                     self.trigger_alarm()
                     self.send_idle(timestamp)
+
                 elif state == STOP_BEEP:
-                    if self.pending_stop:
-                        self.pending_stop = False
+                    self.pending_stop = False
                     self.stop_sound()
                     self.hide_window()
                     self.send_idle(timestamp)
+
                 elif state == IDLE:
                     self.send_idle(timestamp)
+
                 elif state == CONNECTION_ACCEPTED:
-                    print("Connection accepted by server")
+                    # Can mostly be ignored
+                    pass
+
                 elif state == SEEKING_CONNECTION:
-                    # Server should not send this, just log
-                    print("Received SEEKING_CONNECTION from server (unexpected)")
-                else:
-                    print("Unknown state:", state)
+                    # Should not happen
+                    print("Unexpected SEEKING_CONNECTION from server")
 
             except Exception:
                 traceback.print_exc()
@@ -118,12 +121,16 @@ class DeskDashApp:
             if current_time - self.last_packet_time > SEEKING_INTERVAL:
                 try:
                     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    sock.sendto(struct.pack("!IB", 0, SEEKING_CONNECTION), (SERVER_IP, RESPONSE_PORT))
+                    sock.sendto(
+                        struct.pack("!BIB", PROTOCOL_VERSION, 0, SEEKING_CONNECTION),
+                        (SERVER_IP, RESPONSE_PORT)
+                    )
                     sock.close()
-                    # print("Sent SEEKING_CONNECTION")
                 except Exception:
                     traceback.print_exc()
+
                 self.last_packet_time = current_time
+
             time.sleep(1)
 
     # ----------------- BEHAVIOR -----------------
@@ -161,7 +168,6 @@ class DeskDashApp:
     def answer(self):
         self.pending_stop = True
         self.send_stop_packet()
-        # Do NOT stop alarm yet, wait for server STOP_BEEP
 
     def ignore(self):
         self.stop_sound()
@@ -171,7 +177,10 @@ class DeskDashApp:
     def send_idle(self, timestamp):
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(struct.pack("!IB", timestamp, IDLE), (SERVER_IP, RESPONSE_PORT))
+            sock.sendto(
+                struct.pack("!BIB", PROTOCOL_VERSION, timestamp, IDLE),
+                (SERVER_IP, RESPONSE_PORT)
+            )
             sock.close()
         except Exception:
             traceback.print_exc()
@@ -179,7 +188,10 @@ class DeskDashApp:
     def send_stop_packet(self):
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(struct.pack("!IB", self.last_timestamp, STOP_BEEP), (SERVER_IP, RESPONSE_PORT))
+            sock.sendto(
+                struct.pack("!BIB", PROTOCOL_VERSION, self.last_timestamp, STOP_BEEP),
+                (SERVER_IP, RESPONSE_PORT)
+            )
             sock.close()
         except Exception:
             traceback.print_exc()
