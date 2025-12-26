@@ -3,111 +3,78 @@
 #include "hardware/clocks.h"
 
 #include "networking.h"
-#include "LED_control.h"
+#include "gpio_controller.h"
 #include "logging.h"
 
-uint32_t g_ts_LAST_ALARM = 0;
+unsigned long current_event_start_timestamp = 0;
+unsigned long last_packet_received_timestamp = 0;
 
+const unsigned long MAX_ACK_INTERVAL_ms = 1000 * (90 + 10); // 10s is margin to account for network latency
+const unsigned long SEEKING_CONNECTION_REQUEST_INTERVAL_ms = 5000;
 
-
-volatile bool g_EVENT_CANCEL_ALARM = false;
-
-unsigned long alarm_prev_millis = 0;
-bool alarm_active = false;
-
-void btn_pressed() {
-	Logging::Trace(__func__);
-	g_EVENT_CANCEL_ALARM = true;
-}
-
-void start_alarm() {
-
-	Logging::Trace(__func__);
-
-	digitalWrite(GPIO_LED_RED, HIGH);
-	digitalWrite(GPIO_LED_GREEN, LOW);
-
-	alarm_prev_millis = millis();
-	Logging::debug(__func__, "set alarm active");
-	alarm_active = true;
-	Logging::debug(__func__, "unset g_EVENT_CANCEL_ALARM");
-	g_EVENT_CANCEL_ALARM = false;
+void on_button_press() {
+	Logging::info(__func__, "button pressed");
+	send_packet(current_event_start_timestamp, Network::State::STOP_BEEP);
+	// we send packet, but don't act yet, because the server will send back a response
+	// if this response is not received, then the user will know something went wrong
 }
 
 
-void stop_alarm() {
-	Logging::Trace(__func__);
-	Logging::debug(__func__, "disable buzzer & LEDs");
-	noTone(GPIO_ALARM);
-	digitalWrite(GPIO_ALARM, LOW);
-	digitalWrite(GPIO_LED_RED, LOW);
-	digitalWrite(GPIO_LED_GREEN, LOW);
+// rewriting here
+void handle_packet(const UDPPacket& packet) {
 
-	// send cancel packet to server
-	Logging::info(__func__, "send cancel packet to server");
-  send_stop_packet();
-
-	Logging::debug(__func__, "unset alarm_active");
-	alarm_active = false;
-	Logging::debug(__func__, "unset g_EVENT_CANCEL_ALARM");
-	g_EVENT_CANCEL_ALARM = false;
-}
-
-
-void handle_alarm() {
-
-	if (!alarm_active) {
+	// check packet is not old
+	if (packet.event_timestamp != 0 && packet.event_timestamp < current_event_start_timestamp) {
 		return;
 	}
 
-	unsigned long current = millis();
 
-	if (current - alarm_prev_millis >= 270) {
-		// toggle beeper
-		static bool beep_on = false;
-		if (beep_on) {
-			noTone(GPIO_ALARM);
-		}
-		else {
-			tone(GPIO_ALARM, 100);
-		}
 
-		beep_on = !beep_on;
-		alarm_prev_millis = current;
+	if (packet.state == Network::State::SEEKING_CONNECTION) {
+		Logging::error(__func__, "we should never recieve SEEKING_CONNECTION packet. Only send it");
+		return;
 	}
 
-	if (g_EVENT_CANCEL_ALARM) {
-		Logging::debug(__func__, "g_EVENT_CANCEL_ALARM is set. Calling stop_alarm");
-		stop_alarm();
+
+	if (packet.state == Network::State::CONNECTION_ACCEPTED) {
+		GPIOController::configure_idle_flash();
+		last_packet_received_timestamp = millis();
+		// we might handle this based on state later
+		// for now we just assume it worked
+		// and retry after a timeout
+		return;
 	}
+
+
+	if (packet.state == Network::State::START_BEEP) {
+		Logging::info(__func__, "start beep packet received");
+		GPIOController::configure_alarm();
+		current_event_start_timestamp = packet.event_timestamp;
+		last_packet_received_timestamp = millis();
+		send_packet(current_event_start_timestamp, packet.state);
+	}
+
+
+	if (packet.state == Network::State::STOP_BEEP) {
+		Logging::info(__func__, "stop beep packet received");
+		GPIOController::configure_idle_flash();
+		last_packet_received_timestamp = millis();
+		send_packet(current_event_start_timestamp, packet.state);
+	}
+
+
+	if (packet.state == Network::State::IDLE) {
+		Logging::info(__func__, "ACK packet received");
+		last_packet_received_timestamp = millis();
+		send_packet(current_event_start_timestamp, packet.state);
+	}
+
 }
 
 
-
-
-
-
-
 void setup() {
-
 	Logging::init();
-
-	// configure LEDs
-	pinMode(GPIO_LED_RED, OUTPUT);
-	pinMode(GPIO_LED_GREEN, OUTPUT);
-	digitalWrite(GPIO_LED_RED, LOW);
-	digitalWrite(GPIO_LED_GREEN, LOW);
-
-	// configure beeper
-	pinMode(GPIO_ALARM, OUTPUT);
-	digitalWrite(GPIO_ALARM, LOW);
-
-	// configure button
-	pinMode(GPIO_BUTTON, INPUT_PULLUP);
-	attachInterrupt(digitalPinToInterrupt(GPIO_BUTTON), btn_pressed, FALLING);
-
-	// configure wifi
-	setup_wifi();
+	GPIOController::init(on_button_press);
 }
 
 
@@ -115,55 +82,61 @@ void setup() {
 void loop() {
 
 	delay(10);
+	GPIOController::tick();
 
 	// handle wifi
-	if (is_wifi_connected()) {
-		if (!alarm_active) {
-			digitalWrite(GPIO_LED_RED, LOW);
-		}
-	} else {
-		digitalWrite(GPIO_LED_RED, HIGH);
-		digitalWrite(GPIO_LED_GREEN, LOW);
+	while (!is_wifi_connected()) {
+		Logging::debug(__func__, "configuring wifi");
+		GPIOController::configure_no_wifi();
 		setup_wifi();
-		return;
 	}
 
-	// heartbeat green LED
-	if (!alarm_active) {
-		int interval = digitalRead(GPIO_LED_GREEN) ? 50 : 950;
-		static unsigned long prev_millis = 0;
-		unsigned long current_millis = millis();
-		if (current_millis - prev_millis >= interval) {
-			prev_millis = current_millis;
-			digitalWrite(GPIO_LED_GREEN, !digitalRead(GPIO_LED_GREEN));
+	UDPPacket packet = UDPPacket(0, 0);
+	if (read_udp_packet(packet) == NETWORK_SUCCESS) {
+		Logging::debug(__func__, "handling packet");
+		handle_packet(packet);
+	}
+
+	unsigned long current_time = millis();
+
+	if (current_time - last_packet_received_timestamp > MAX_ACK_INTERVAL_ms) {
+
+		static unsigned long last_seeking_connection_packet_sent = 0;
+
+		if (current_time - last_seeking_connection_packet_sent > SEEKING_CONNECTION_REQUEST_INTERVAL_ms) {
+			send_packet(0, Network::State::SEEKING_CONNECTION);
+			last_seeking_connection_packet_sent = current_time;
 		}
+
 	}
 
-	// handle UDP messages
-	UDPPacket packet = read_udp_packet();
-
-	if (packet.message == AlarmStatusCodes::START_ALARM) {
-		if (packet.timestamp > g_ts_LAST_ALARM) {
-			Logging::info(__func__, "new alarm packet recieved");
-			g_ts_LAST_ALARM = packet.timestamp;
-			Logging::info(__func__, "recieved packet START_ALARM");
-			start_alarm();
-		}
-		else {
-			Logging::info(__func__, "repeated alarm packet recieved");
-		}
-	}
-
-	if (packet.message == AlarmStatusCodes::STOP_ALARM) {
-		Logging::info(__func__, "recieved packet STOP_ALARM");
-		g_EVENT_CANCEL_ALARM = true;
-	}
-
-	handle_alarm();
 }
 
 
+/*
 
+Let's think about what I need now
+
+Start by connecting to wifi
+Let the main loop handle the rest
+
+:loop
+	is_wifi_connected
+	before doing anything we need to know we are still connected
+
+	read_udp_packet
+	then make another function to handle this packet
+	this will usually read 0 bytes and exit straight away
+
+	If last packet received is over theshold, send SEEKING_CONNECTION packet
+	initial value should be 0 to force this to be run instantly
+
+event callback, if button is pressed send STOP_BEEP packet
+
+
+
+
+*/
 
 
 
