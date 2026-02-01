@@ -14,7 +14,7 @@ import signal
 # ----------------- CONFIG -----------------
 
 AUDIO_FILE = "assets/door_desk.mp3"
-
+g_CLIENT_RUNNING = True
 
 class Packet:
 	def __init__(self, recvfrom_data, recvfrom_addr):
@@ -67,11 +67,14 @@ class Network:
 	def packet_listener(callback):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		sock.bind(("0.0.0.0", Network.Port.INBOUND))
+		sock.settimeout(0.5)
 
 		print("Listening for packets")
-
-		while True:
-			data, addr = sock.recvfrom(128)
+		while g_CLIENT_RUNNING:
+			try:
+				data, addr = sock.recvfrom(128)
+			except socket.timeout:
+				continue
 
 			packet = Packet(data, addr)
 			callback(packet)
@@ -198,7 +201,7 @@ class DeskDashApp:
 
 	# ----------------- SEEKING CONNECTION -----------------
 	def send_seeking_loop(self):
-		while True:
+		while g_CLIENT_RUNNING:
 			current_time = time.time()
 			if current_time - Timers.last_packet_received_timestamp > Timers.MAX_ACK_INTERVAL_ms:
 				if current_time - Timers.last_seeking_conneciton_packet_sent_timestamp > Timers.SEEKING_CONNECTION_REQUEST_INTERVAL_ms:
@@ -222,8 +225,17 @@ class DeskDashApp:
 		self.root.withdraw()
 
 	def quit_app(self, icon=None, item=None):
+		global g_CLIENT_RUNNING
+		g_CLIENT_RUNNING = False
+
 		self.stop_sound()
+		pygame.mixer.quit()
+		
 		self.tray_icon.stop()
+
+		for callback_id in self.root.tk.call('after', 'info'):
+			self.root.after_cancel(callback_id)
+
 		self.root.quit()
 		sys.exit(0)
 

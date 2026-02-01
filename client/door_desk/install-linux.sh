@@ -22,6 +22,9 @@ WorkingDirectory="$SCRIPT_DIR"
 ExecStart="$SCRIPT_DIR/venv/bin/python" "$SCRIPT_DIR/door_desk.pyw"
 Restart=on-failure
 RestartSec=5
+KillSignal=SIGKILL
+TimeoutStopSec=1
+KillMode=control-group
 
 [Install]
 WantedBy=default.target
