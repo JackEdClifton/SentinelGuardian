@@ -7,7 +7,9 @@ import time
 import sys
 import traceback
 import pystray
-from PIL import Image, ImageTk
+from PIL import Image
+from io import BytesIO
+import signal
 
 # ----------------- CONFIG -----------------
 
@@ -85,6 +87,26 @@ class Timers:
 
 
 
+class AppIcon:
+	file_path = "assets/door_desk.ico"
+
+	tray = None
+	window = None
+
+
+	def init():
+		img = Image.open(AppIcon.file_path).convert("RGBA")
+
+		AppIcon.tray = img.resize((32, 32))
+
+		img64 = img.resize((64, 64))
+		buf = BytesIO()
+		img64.save(buf, format="PNG")
+		buf.seek(0)
+		AppIcon.window = tk.PhotoImage(data=buf.read())
+
+
+
 # ----------------- DESKTOP APP -----------------
 class DeskDashApp:
 	def __init__(self):
@@ -100,6 +122,8 @@ class DeskDashApp:
 		self.root.attributes('-topmost', True)
 		self.root.withdraw()
 
+		AppIcon.init()
+
 		tk.Label(self.root, text="Someone is at the door!", font=("Segoe UI", 14)).pack(pady=15)
 		btn_frame = tk.Frame(self.root)
 		btn_frame.pack(pady=5)
@@ -107,12 +131,10 @@ class DeskDashApp:
 		tk.Button(btn_frame, text="Ignore", font=("Segoe UI", 12), width=10, command=self.ignore).grid(row=0, column=1, padx=10)
 
 		# Icon / tray
-		self.icon_img = Image.open("assets/door_desk.ico")
-		self.tk_icon = ImageTk.PhotoImage(self.icon_img)
-		self.root.iconphoto(False, self.tk_icon)
+		self.root.iconphoto(True, AppIcon.window)
 		self.tray_icon = pystray.Icon(
 			"DeskDash",
-			self.icon_img,
+			AppIcon.tray,
 			"DeskDash",
 			menu=pystray.Menu(pystray.MenuItem("Quit", self.quit_app))
 		)
@@ -125,6 +147,8 @@ class DeskDashApp:
 		threading.Thread(target=self.tray_icon.run, daemon=True).start()
 		time.sleep(1) # just to make sure the listening thread has started
 		threading.Thread(target=self.send_seeking_loop, daemon=True).start()
+
+		signal.signal(signal.SIGINT, self.handle_sigint)
 
 	# ----------------- UDP LISTENER -----------------
 	def handle_packet(self, packet):
@@ -227,6 +251,9 @@ class DeskDashApp:
 	# ----------------- MAIN LOOP -----------------
 	def run(self):
 		self.root.mainloop()
+	
+	def handle_sigint(self, signum, frame):
+		self.quit_app()
 
 
 # ----------------- RUN -----------------
